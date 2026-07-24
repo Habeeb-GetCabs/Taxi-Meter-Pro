@@ -1,0 +1,95 @@
+package com.example.ui.screens
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalTaxi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+
+@Composable
+fun SplashScreen(onNavigateToHome: () -> Unit) {
+    val scale = remember { Animatable(0f) }
+    val alpha = remember { Animatable(0f) }
+
+    LaunchedEffect(key1 = true) {
+        // Run staggered animations in parallel
+        scale.animateTo(
+            targetValue = 1.1f,
+            animationSpec = tween(durationMillis = 800)
+        )
+        scale.animateTo(
+            targetValue = 1.0f,
+            animationSpec = tween(durationMillis = 300)
+        )
+        alpha.animateTo(
+            targetValue = 1.0f,
+            animationSpec = tween(durationMillis = 400)
+        )
+        delay(1200) // Keep splash visible for dramatic entry
+        onNavigateToHome()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFDFBFF)) // Artistic Flair Off-White Light background
+            .testTag("splash_screen"),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .scale(scale.value)
+                    .background(Color(0xFFE53935), CircleShape), // Artistic Flair Red accent
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocalTaxi,
+                    contentDescription = "Taxi Logo",
+                    tint = Color.White,
+                    modifier = Modifier.size(64.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "GET TAXI METER",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF0F172A), // Dark slate text
+                modifier = Modifier.scale(scale.value)
+            )
+
+            Text(
+                text = "ARTISTIC FLAIR EDITION",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFE53935), // Red secondary tag
+                letterSpacing = 2.sp,
+                modifier = Modifier.scale(scale.value)
+            )
+        }
+    }
+}
