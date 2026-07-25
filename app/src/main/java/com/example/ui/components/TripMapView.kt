@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.annotation.SuppressLint
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.BuildConfig
 import com.example.data.model.TripState
 import com.example.data.model.TripStatus
@@ -39,6 +42,13 @@ import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+enum class MapTypeMode {
+    OSM_FREE_STREET,
+    OSM_FREE_DARK,
+    VECTOR_RADAR,
+    GOOGLE_MAPS
+}
+
 @Composable
 fun TripMapView(
     tripState: TripState,
@@ -46,16 +56,17 @@ fun TripMapView(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // Check if MAPS_API_KEY is configured with a real key or placeholder
+    // Check if MAPS_API_KEY is configured with a real key
     val mapsApiKey = try { BuildConfig.MAPS_API_KEY } catch (e: Exception) { "" }
-    val isKeyConfigured = mapsApiKey.isNotBlank() &&
+    val isGoogleKeyConfigured = mapsApiKey.isNotBlank() &&
             !mapsApiKey.contains("DEFAULT_MAPS_KEY", ignoreCase = true) &&
             !mapsApiKey.contains("MY_GEMINI_API_KEY", ignoreCase = true) &&
             !mapsApiKey.contains("AIzaSyB7j5s8T369OKe4H69e3jhkGfM2sJhniCo", ignoreCase = true)
 
-    var forceVectorCanvas by remember { mutableStateOf(!isKeyConfigured) }
+    // Default map mode is 100% Free OpenStreetMap
+    var selectedMode by remember { mutableStateOf(MapTypeMode.OSM_FREE_STREET) }
 
-    // Default location (e.g., San Francisco center) if GPS is null
+    // LatLng for Google Maps if used
     val currentLatLng = if (tripState.latitude != null && tripState.longitude != null) {
         LatLng(tripState.latitude, tripState.longitude)
     } else {
@@ -66,13 +77,10 @@ fun TripMapView(
         position = CameraPosition.fromLatLngZoom(currentLatLng, 16f)
     }
 
-    // Auto-update camera on location change if user location moves
     LaunchedEffect(currentLatLng) {
-        if (tripState.latitude != null && tripState.longitude != null) {
+        if (tripState.latitude != null && tripState.longitude != null && selectedMode == MapTypeMode.GOOGLE_MAPS) {
             try {
-                cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLng(currentLatLng)
-                )
+                cameraPositionState.animate(CameraUpdateFactory.newLatLng(currentLatLng))
             } catch (_: Exception) {}
         }
     }
@@ -81,29 +89,9 @@ fun TripMapView(
         tripState.routePoints.map { LatLng(it.first, it.second) }
     }
 
-    val startLatLng = remember(latLngRoute) {
-        latLngRoute.firstOrNull()
-    }
-
-    val uiSettings = remember {
-        MapUiSettings(
-            zoomControlsEnabled = false,
-            myLocationButtonEnabled = false,
-            compassEnabled = true,
-            mapToolbarEnabled = false
-        )
-    }
-
-    val mapProperties = remember {
-        MapProperties(
-            isMyLocationEnabled = false,
-            mapType = MapType.NORMAL
-        )
-    }
-
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)), // Modern slate-900 base
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
             .fillMaxWidth()
@@ -111,57 +99,66 @@ fun TripMapView(
             .border(1.dp, Color(0xFF334155), RoundedCornerShape(24.dp))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (!forceVectorCanvas && isKeyConfigured) {
-                // Render standard Google Maps SDK view
-                GoogleMap(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("google_trip_map"),
-                    cameraPositionState = cameraPositionState,
-                    properties = mapProperties,
-                    uiSettings = uiSettings
-                ) {
-                    if (latLngRoute.size >= 2) {
-                        Polyline(
-                            points = latLngRoute,
-                            color = Color(0xFFE53935),
-                            width = 12f,
-                            geodesic = true
-                        )
-                    }
-
-                    if (startLatLng != null) {
-                        Marker(
-                            state = rememberMarkerState(position = startLatLng),
-                            title = "Pick-up Location",
-                            snippet = "Trip started here",
-                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                        )
-                    }
-
-                    if (tripState.latitude != null && tripState.longitude != null) {
-                        Marker(
-                            state = rememberMarkerState(position = currentLatLng),
-                            title = "Taxi Position",
-                            snippet = "Speed: ${String.format(Locale.US, "%.1f", tripState.speedKmH)} km/h",
-                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+            when (selectedMode) {
+                MapTypeMode.OSM_FREE_STREET -> {
+                    OpenStreetMapTileView(
+                        tripState = tripState,
+                        useDarkStyle = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                MapTypeMode.OSM_FREE_DARK -> {
+                    OpenStreetMapTileView(
+                        tripState = tripState,
+                        useDarkStyle = true,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                MapTypeMode.VECTOR_RADAR -> {
+                    GpsVectorRouteCanvas(
+                        tripState = tripState,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                MapTypeMode.GOOGLE_MAPS -> {
+                    if (isGoogleKeyConfigured) {
+                        GoogleMap(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("google_trip_map"),
+                            cameraPositionState = cameraPositionState
+                        ) {
+                            if (latLngRoute.size >= 2) {
+                                Polyline(
+                                    points = latLngRoute,
+                                    color = Color(0xFFE53935),
+                                    width = 12f
+                                )
+                            }
+                            if (tripState.latitude != null && tripState.longitude != null) {
+                                Marker(
+                                    state = rememberMarkerState(position = currentLatLng),
+                                    title = "Taxi Position",
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                                )
+                            }
+                        }
+                    } else {
+                        OpenStreetMapTileView(
+                            tripState = tripState,
+                            useDarkStyle = false,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
-            } else {
-                // High-contrast Real-Time Vector Route Canvas fallback
-                GpsVectorRouteCanvas(
-                    tripState = tripState,
-                    modifier = Modifier.fillMaxSize()
-                )
             }
 
-            // Map Header & Key Status Badge Overlay
+            // Map Overlay Header Bar
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopStart)
-                    .padding(12.dp)
+                    .padding(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -169,7 +166,7 @@ fun TripMapView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        color = Color(0xFF0F172A).copy(alpha = 0.88f),
+                        color = Color(0xFF0F172A).copy(alpha = 0.90f),
                         shape = RoundedCornerShape(12.dp),
                         shadowElevation = 4.dp
                     ) {
@@ -187,41 +184,63 @@ fun TripMapView(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (forceVectorCanvas) "GPS VECTOR MAP" else "GOOGLE MAPS LIVE",
+                                text = when (selectedMode) {
+                                    MapTypeMode.OSM_FREE_STREET -> "FREE OPENSTREETMAP"
+                                    MapTypeMode.OSM_FREE_DARK -> "FREE DARK MAP"
+                                    MapTypeMode.VECTOR_RADAR -> "VECTOR RADAR MAP"
+                                    MapTypeMode.GOOGLE_MAPS -> "GOOGLE MAPS LIVE"
+                                },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            if (tripState.routePoints.isNotEmpty()) {
-                                Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = Color(0xFF166534),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
                                 Text(
-                                    text = "(${tripState.routePoints.size} pts)",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF94A3B8)
+                                    text = "100% FREE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF86EFAC),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                 )
                             }
                         }
                     }
 
-                    // Mode Toggle Switch Button
+                    // Map Mode Switcher Button
                     Surface(
-                        color = Color(0xFF0F172A).copy(alpha = 0.88f),
+                        color = Color(0xFF0F172A).copy(alpha = 0.90f),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.clickable { forceVectorCanvas = !forceVectorCanvas }
+                        modifier = Modifier.clickable {
+                            selectedMode = when (selectedMode) {
+                                MapTypeMode.OSM_FREE_STREET -> MapTypeMode.OSM_FREE_DARK
+                                MapTypeMode.OSM_FREE_DARK -> MapTypeMode.VECTOR_RADAR
+                                MapTypeMode.VECTOR_RADAR -> if (isGoogleKeyConfigured) MapTypeMode.GOOGLE_MAPS else MapTypeMode.OSM_FREE_STREET
+                                MapTypeMode.GOOGLE_MAPS -> MapTypeMode.OSM_FREE_STREET
+                            }
+                        }
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (forceVectorCanvas) Icons.Default.Map else Icons.Default.Layers,
-                                contentDescription = "Toggle Map Mode",
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Switch Map Style",
                                 tint = Color(0xFF38BDF8),
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (forceVectorCanvas) "Google View" else "Vector View",
+                                text = when (selectedMode) {
+                                    MapTypeMode.OSM_FREE_STREET -> "Street Mode"
+                                    MapTypeMode.OSM_FREE_DARK -> "Dark Mode"
+                                    MapTypeMode.VECTOR_RADAR -> "Vector Radar"
+                                    MapTypeMode.GOOGLE_MAPS -> "Google View"
+                                },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF38BDF8)
@@ -229,77 +248,117 @@ fun TripMapView(
                         }
                     }
                 }
-
-                // API Key Notice Banner if default key is detected
-                if (!isKeyConfigured) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        color = Color(0xFF7C2D12).copy(alpha = 0.90f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFFDBA74),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Add MAPS_API_KEY in Secrets panel for Google satellite tiles",
-                                fontSize = 10.sp,
-                                color = Color(0xFFFFEDD5),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Recenter Camera Floating Button
-            if (!forceVectorCanvas && isKeyConfigured) {
-                FloatingActionButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            try {
-                                if (latLngRoute.size >= 2) {
-                                    val builder = LatLngBounds.Builder()
-                                    latLngRoute.forEach { builder.include(it) }
-                                    val bounds = builder.build()
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngBounds(bounds, 64)
-                                    )
-                                } else {
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f)
-                                    )
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    },
-                    shape = CircleShape,
-                    containerColor = Color.White,
-                    contentColor = Color(0xFFE53935),
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .size(40.dp)
-                        .align(Alignment.BottomEnd)
-                        .testTag("map_recenter_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GpsFixed,
-                        contentDescription = "Recenter Map",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
             }
         }
     }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun OpenStreetMapTileView(
+    tripState: TripState,
+    useDarkStyle: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val lat = tripState.latitude ?: 37.7749
+    val lon = tripState.longitude ?: -122.4194
+    val routePoints = tripState.routePoints
+
+    val htmlContent = remember(useDarkStyle) {
+        val tileUrl = if (useDarkStyle) {
+            "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        } else {
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        }
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; }
+                .leaflet-control-attribution { font-size: 8px !important; opacity: 0.5; }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([$lat, $lon], 16);
+                L.tileLayer('$tileUrl', {
+                    maxZoom: 19,
+                    attribution: 'OpenStreetMap'
+                }).addTo(map);
+
+                var startMarker = null;
+                var currentMarker = null;
+                var routePolyline = null;
+
+                function updateLocation(currLat, currLon, routeJson) {
+                    var latLng = [currLat, currLon];
+                    
+                    if (!currentMarker) {
+                        var redIcon = L.divIcon({
+                            className: 'custom-taxi-pin',
+                            html: "<div style='background-color:#ef4444;width:18px;height:18px;border-radius:50%;border:3px solid #ffffff;box-shadow:0 0 12px rgba(239,68,68,0.9);'></div>",
+                            iconSize: [18, 18],
+                            iconAnchor: [9, 9]
+                        });
+                        currentMarker = L.marker(latLng, {icon: redIcon}).addTo(map);
+                    } else {
+                        currentMarker.setLatLng(latLng);
+                    }
+                    map.panTo(latLng);
+
+                    try {
+                        var points = JSON.parse(routeJson);
+                        if (points && points.length > 0) {
+                            if (!startMarker) {
+                                var greenIcon = L.divIcon({
+                                    className: 'custom-start-pin',
+                                    html: "<div style='background-color:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid #ffffff;'></div>",
+                                    iconSize: [14, 14],
+                                    iconAnchor: [7, 7]
+                                });
+                                startMarker = L.marker([points[0][0], points[0][1]], {icon: greenIcon}).addTo(map);
+                            }
+                            if (routePolyline) {
+                                routePolyline.setLatLngs(points);
+                            } else {
+                                routePolyline = L.polyline(points, {color: '#ef4444', weight: 5, opacity: 0.95}).addTo(map);
+                            }
+                        }
+                    } catch(e){}
+                }
+            </script>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        val routeJson = routePoints.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }
+                        evaluateJavascript("updateLocation($lat, $lon, '$routeJson');", null)
+                    }
+                }
+                loadDataWithBaseURL("https://openstreetmap.org", htmlContent, "text/html", "UTF-8", null)
+            }
+        },
+        update = { webView ->
+            val routeJson = routePoints.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }
+            webView.evaluateJavascript("updateLocation($lat, $lon, '$routeJson');", null)
+        },
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -313,7 +372,6 @@ private fun GpsVectorRouteCanvas(
         val width = size.width
         val height = size.height
 
-        // Draw grid lines for high-tech radar aesthetic
         val gridStep = 40.dp.toPx()
         var x = 0f
         while (x < width) {
@@ -337,7 +395,6 @@ private fun GpsVectorRouteCanvas(
         }
 
         if (route.isEmpty()) {
-            // Draw idle pulse target at center
             val centerX = width / 2f
             val centerY = height / 2f
             drawCircle(
@@ -353,7 +410,6 @@ private fun GpsVectorRouteCanvas(
             return@Canvas
         }
 
-        // Calculate bounds to scale GPS route to canvas
         val lats = route.map { it.first }
         val lons = route.map { it.second }
         val minLat = lats.minOrNull() ?: 0.0
@@ -370,14 +426,13 @@ private fun GpsVectorRouteCanvas(
 
         fun mapToScreen(lat: Double, lon: Double): Offset {
             val normX = ((lon - minLon) / lonRange).toFloat()
-            val normY = (1.0f - ((lat - minLat) / latRange)).toFloat() // invert Y for screen space
+            val normY = (1.0f - ((lat - minLat) / latRange)).toFloat()
             return Offset(
                 x = padding + (normX * usableW),
                 y = padding + (normY * usableH)
             )
         }
 
-        // Draw Route Polyline
         val path = Path()
         val firstPoint = mapToScreen(route.first().first, route.first().second)
         path.moveTo(firstPoint.x, firstPoint.y)
@@ -389,7 +444,7 @@ private fun GpsVectorRouteCanvas(
 
         drawPath(
             path = path,
-            color = Color(0xFFEF4444), // Vibrant Red route path
+            color = Color(0xFFEF4444),
             style = Stroke(
                 width = 8f,
                 cap = StrokeCap.Round,
@@ -397,7 +452,6 @@ private fun GpsVectorRouteCanvas(
             )
         )
 
-        // Draw Pick-up Start Pin (Green)
         val startScreen = mapToScreen(route.first().first, route.first().second)
         drawCircle(
             color = Color(0xFF22C55E),
@@ -410,7 +464,6 @@ private fun GpsVectorRouteCanvas(
             center = startScreen
         )
 
-        // Draw Current Vehicle Position Pin (Red / Pulse)
         val currentScreen = mapToScreen(route.last().first, route.last().second)
         drawCircle(
             color = Color(0xFFEF4444).copy(alpha = 0.3f),
@@ -429,4 +482,3 @@ private fun GpsVectorRouteCanvas(
         )
     }
 }
-

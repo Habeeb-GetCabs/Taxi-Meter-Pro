@@ -4,11 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.service.LocationTrackingService
 import com.example.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +34,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val tripState by LocationTrackingService.tripState.collectAsStateWithLifecycle()
     val baseFareState by viewModel.baseFare.collectAsStateWithLifecycle()
     val farePerKmState by viewModel.farePerKm.collectAsStateWithLifecycle()
     val waitFarePerMinState by viewModel.waitFarePerMin.collectAsStateWithLifecycle()
@@ -474,26 +478,111 @@ fun SettingsScreen(
                 }
             }
 
-            // Out of City Surcharge Percentage Card
+            // Out of City Surcharge & Mode Toggle Card
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (tripState.isOutOfCity) Color(0xFFFFF7ED) else Color.White
+                ),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+                    .border(
+                        width = 1.5.dp,
+                        color = if (tripState.isOutOfCity) Color(0xFFEA580C) else Color(0xFFF1F5F9),
+                        shape = RoundedCornerShape(24.dp)
+                    )
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        color = if (tripState.isOutOfCity) Color(0xFFFFEDD5) else Color(0xFFF1F5F9),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Explore,
+                                    contentDescription = null,
+                                    tint = if (tripState.isOutOfCity) Color(0xFFEA580C) else Color(0xFF64748B),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Out of City Charges Mode",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF0F172A)
+                                    )
+                                    if (tripState.isOutOfCity) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "ACTIVE",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 9.sp,
+                                            color = Color(0xFFEA580C),
+                                            modifier = Modifier
+                                                .background(Color(0xFFFFEDD5), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = if (tripState.isOutOfCity)
+                                        "Outstation tariff active (+${outOfCitySurchargePercentInput}% surcharge)"
+                                    else
+                                        "Enable outstation return tariff for long distance rides",
+                                    fontSize = 11.sp,
+                                    color = if (tripState.isOutOfCity) Color(0xFFC2410C) else Color(0xFF64748B)
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = tripState.isOutOfCity,
+                            onCheckedChange = { enabled ->
+                                val surchargePct = outOfCitySurchargePercentInput.toDoubleOrNull() ?: outOfCitySurchargePercentState
+                                LocationTrackingService.toggleOutOfCity(context, enabled, surchargePct)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFEA580C),
+                                uncheckedThumbColor = Color(0xFF94A3B8),
+                                uncheckedTrackColor = Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier.testTag("toggle_out_of_city")
+                        )
+                    }
+
+                    HorizontalDivider(
+                        color = if (tripState.isOutOfCity) Color(0xFFFED7AA) else Color(0xFFF1F5F9),
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+
                     Text(
-                        text = "Out of City Surcharge (%)",
+                        text = "Out of City Surcharge Rate (%)",
                         color = Color(0xFF1E293B),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                     Text(
-                        text = "Percentage added to total fare when Out of City / Outstation mode is toggled on.",
+                        text = "Percentage added to base + distance fare when Out of City mode is enabled.",
                         color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(vertical = 2.dp)
                     )
                     OutlinedTextField(
                         value = outOfCitySurchargePercentInput,
