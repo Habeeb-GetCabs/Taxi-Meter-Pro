@@ -16,7 +16,11 @@ data class TripEntity(
     val startLongitude: Double,
     val endLatitude: Double,
     val endLongitude: Double,
-    val passengerNotes: String = ""
+    val passengerNotes: String = "",
+    val pickupAddress: String = "",
+    val dropAddress: String = "",
+    val isOutOfCity: Boolean = false,
+    val outOfCitySurcharge: Double = 0.0
 )
 
 @Entity(tableName = "active_trip")
@@ -29,5 +33,7 @@ data class ActiveTripRecord(
     val elapsedSeconds: Long,
     val lastLatitude: Double,
     val lastLongitude: Double,
-    val lastUpdateTime: Long
+    val lastUpdateTime: Long,
+    val isOutOfCity: Boolean = false,
+    val pickupAddress: String = ""
 )

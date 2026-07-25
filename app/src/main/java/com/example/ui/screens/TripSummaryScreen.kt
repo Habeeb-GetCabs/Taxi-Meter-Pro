@@ -325,43 +325,61 @@ fun TripSummaryScreen(
                     }
                 }
 
-                // LOCATION DETAILS CARD (If coordinates logged)
-                if (currentTrip.startLatitude != 0.0 || currentTrip.startLongitude != 0.0) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "ROUTE COORDINATES",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.5.sp
-                                )
+                // LOCATION & ROUTE DETAILS CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ROUTE & LOCATIONS",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val pLoc = if (currentTrip.pickupAddress.isNotBlank()) currentTrip.pickupAddress else if (currentTrip.startLatitude != 0.0) "${String.format(Locale.US, "%.4f", currentTrip.startLatitude)}, ${String.format(Locale.US, "%.4f", currentTrip.startLongitude)}" else "GPS Location"
+                        val dLoc = if (currentTrip.dropAddress.isNotBlank()) currentTrip.dropAddress else if (currentTrip.endLatitude != 0.0) "${String.format(Locale.US, "%.4f", currentTrip.endLatitude)}, ${String.format(Locale.US, "%.4f", currentTrip.endLongitude)}" else "GPS Location"
+
+                        SummaryLineRow(label = "📍 Pick up Location", value = pLoc)
+                        SummaryLineRow(label = "🏁 Drop Location", value = dLoc)
+
+                        if (currentTrip.isOutOfCity) {
+                            SummaryLineRow(
+                                label = "🛣️ Out of City Surcharge",
+                                value = "+$currencySymbol${String.format(Locale.US, "%.2f", currentTrip.outOfCitySurcharge)}"
+                            )
+                        }
+
+                        if (currentTrip.startLatitude != 0.0 && currentTrip.endLatitude != 0.0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(
+                                onClick = {
+                                    val mapsUrl = "https://www.google.com/maps/dir/?api=1&origin=${currentTrip.startLatitude},${currentTrip.startLongitude}&destination=${currentTrip.endLatitude},${currentTrip.endLongitude}"
+                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(mapsUrl)).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("View Route on Google Maps 🗺️", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
                             }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            SummaryLineRow(
-                                label = "Origin GPS",
-                                value = "${String.format(Locale.US, "%.4f", currentTrip.startLatitude)}, ${String.format(Locale.US, "%.4f", currentTrip.startLongitude)}"
-                            )
-                            SummaryLineRow(
-                                label = "Destination GPS",
-                                value = "${String.format(Locale.US, "%.4f", currentTrip.endLatitude)}, ${String.format(Locale.US, "%.4f", currentTrip.endLongitude)}"
-                            )
                         }
                     }
                 }

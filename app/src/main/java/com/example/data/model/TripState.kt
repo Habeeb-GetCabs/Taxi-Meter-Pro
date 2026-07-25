@@ -26,5 +26,10 @@ data class TripState(
     val isWaitingPaused: Boolean = false,
     val autoStartEnabled: Boolean = false,
     val isSimulationEnabled: Boolean = false,
+    val isOutOfCity: Boolean = false,
+    val outOfCitySurchargePercent: Double = 25.0,
+    val outOfCitySurchargeAmount: Double = 0.0,
+    val pickupAddress: String = "",
+    val dropAddress: String = "",
     val routePoints: List<Pair<Double, Double>> = emptyList()
 )

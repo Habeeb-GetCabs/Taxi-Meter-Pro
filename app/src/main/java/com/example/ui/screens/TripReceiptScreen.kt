@@ -201,6 +201,35 @@ fun TripReceiptScreen(
                         ReceiptLineItem(label = "Elapsed Ride Duration", value = "${durationMin}m ${durationSec}s")
                         ReceiptLineItem(label = "Waiting Time", value = "${waitingMin}m ${waitingSec}s")
 
+                        val pLoc = if (trip.pickupAddress.isNotBlank()) trip.pickupAddress else if (trip.startLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.startLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.startLongitude)}" else "GPS Location"
+                        val dLoc = if (trip.dropAddress.isNotBlank()) trip.dropAddress else if (trip.endLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.endLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.endLongitude)}" else "GPS Location"
+
+                        ReceiptLineItem(label = "📍 Pick up Location", value = pLoc)
+                        ReceiptLineItem(label = "🏁 Drop Location", value = dLoc)
+
+                        if (trip.startLatitude != 0.0 && trip.endLatitude != 0.0) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        val mapsUrl = "https://www.google.com/maps/dir/?api=1&origin=${trip.startLatitude},${trip.startLongitude}&destination=${trip.endLatitude},${trip.endLongitude}"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(mapsUrl)).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                        context.startActivity(intent)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFE53935))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Open Route on Google Maps 🗺️", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                                }
+                            }
+                        }
+
                         if (trip.passengerNotes.isNotEmpty()) {
                             ReceiptLineItem(label = "Passenger Notes", value = trip.passengerNotes)
                         }
@@ -229,6 +258,13 @@ fun TripReceiptScreen(
                         ReceiptLineItem(label = "Base Fare (Minimum)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estBase)}")
                         ReceiptLineItem(label = "Distance Fare (${String.format(Locale.US, "%.1f", trip.distanceKm)} km × ${currencySymbol}28/km)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estDistFare)}")
                         ReceiptLineItem(label = "Waiting Charge (${waitingMin}m ${waitingSec}s × ${currencySymbol}2/min)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estWaitFare)}")
+
+                        if (trip.isOutOfCity) {
+                            ReceiptLineItem(
+                                label = "Out of City Outstation Surcharge", 
+                                value = "+$currencySymbol${String.format(Locale.US, "%.2f", trip.outOfCitySurcharge)}"
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
                         DottedDivider(color = Color(0xFF0F172A))
@@ -520,7 +556,18 @@ private fun buildBillTextMessage(
 ): String {
     val dateOnlyFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val dateStr = dateOnlyFormatter.format(Date(trip.startTime))
-    val passenger = if (trip.passengerNotes.isNotEmpty()) "\nPassenger: ${trip.passengerNotes}" else ""
+    val passenger = if (trip.passengerNotes.isNotEmpty()) "\n👤 Passenger: ${trip.passengerNotes}" else ""
+
+    val pLoc = if (trip.pickupAddress.isNotBlank()) trip.pickupAddress else if (trip.startLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.startLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.startLongitude)}" else "GPS Location"
+    val dLoc = if (trip.dropAddress.isNotBlank()) trip.dropAddress else if (trip.endLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.endLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.endLongitude)}" else "GPS Location"
+
+    val outOfCityText = if (trip.isOutOfCity) {
+        "\n🛣️ Out of City Surcharge: $currency${String.format(Locale.US, "%.2f", trip.outOfCitySurcharge)}"
+    } else ""
+
+    val mapLinkText = if (trip.startLatitude != 0.0 && trip.endLatitude != 0.0) {
+        "\n🗺️ Google Maps Route: https://www.google.com/maps/dir/?api=1&origin=${trip.startLatitude},${trip.startLongitude}&destination=${trip.endLatitude},${trip.endLongitude}"
+    } else ""
 
     return """
 🚕 *GET TAXI METER - OFFICIAL TRIP BILL* 🚕
@@ -531,12 +578,14 @@ WELCOME TO GET TAXI METER!
 ⏰ End Time: $endTimeStr
 ⏱️ Ride Duration: ${durationMin}m ${durationSec}s
 ⏳ Waiting Time: ${waitingMin}m ${waitingSec}s
-📍 Total Distance: ${String.format(Locale.US, "%.2f", trip.distanceKm)} km$passenger
+📍 Pick up Location: $pLoc
+🏁 Drop Location: $dLoc
+🛣️ Total Distance: ${String.format(Locale.US, "%.2f", trip.distanceKm)} km$passenger$mapLinkText
 
 ----------------------------------
 💰 Base Fare: $currency${String.format(Locale.US, "%.2f", 80.00)}
 🛣️ Distance Charge: $currency${String.format(Locale.US, "%.2f", trip.distanceKm * 28.00)}
-⌛ Wait Charge: $currency${String.format(Locale.US, "%.2f", (trip.waitingSeconds / 60.0) * 2.00)}
+⌛ Wait Charge: $currency${String.format(Locale.US, "%.2f", (trip.waitingSeconds / 60.0) * 2.00)}$outOfCityText
 ----------------------------------
 💳 *TOTAL FARE DUE: $currency${String.format(Locale.US, "%.2f", trip.totalFare)}*
 ==================================

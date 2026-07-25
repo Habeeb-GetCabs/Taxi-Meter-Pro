@@ -38,24 +38,27 @@ fun SettingsScreen(
     val audioEnabledState by viewModel.audioEnabled.collectAsStateWithLifecycle()
     val autoStartEnabledState by viewModel.autoStartEnabled.collectAsStateWithLifecycle()
     val currencyState by viewModel.currency.collectAsStateWithLifecycle()
+    val outOfCitySurchargePercentState by viewModel.outOfCitySurchargePercent.collectAsStateWithLifecycle()
 
     var baseFareInput by remember { mutableStateOf("") }
     var farePerKmInput by remember { mutableStateOf("") }
     var waitFarePerMinInput by remember { mutableStateOf("") }
     var speedThresholdInput by remember { mutableStateOf("") }
     var currencyInput by remember { mutableStateOf("") }
+    var outOfCitySurchargePercentInput by remember { mutableStateOf("") }
     var audioEnabled by remember { mutableStateOf(true) }
     var autoStartEnabled by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
 
     // Synchronize inputs once preferences load
-    LaunchedEffect(baseFareState, farePerKmState, waitFarePerMinState, speedThresholdState, currencyState, audioEnabledState, autoStartEnabledState) {
+    LaunchedEffect(baseFareState, farePerKmState, waitFarePerMinState, speedThresholdState, currencyState, outOfCitySurchargePercentState, audioEnabledState, autoStartEnabledState) {
         baseFareInput = baseFareState.toString()
         farePerKmInput = farePerKmState.toString()
         waitFarePerMinInput = waitFarePerMinState.toString()
         speedThresholdInput = speedThresholdState.toString()
         currencyInput = currencyState
+        outOfCitySurchargePercentInput = outOfCitySurchargePercentState.toString()
         audioEnabled = audioEnabledState
         autoStartEnabled = autoStartEnabledState
     }
@@ -97,12 +100,14 @@ fun SettingsScreen(
                     val fk = farePerKmInput.toDoubleOrNull() ?: farePerKmState
                     val wf = waitFarePerMinInput.toDoubleOrNull() ?: waitFarePerMinState
                     val st = speedThresholdInput.toDoubleOrNull() ?: speedThresholdState
+                    val ooc = outOfCitySurchargePercentInput.toDoubleOrNull() ?: outOfCitySurchargePercentState
                     
                     viewModel.updateBaseFare(bf)
                     viewModel.updateFarePerKm(fk)
                     viewModel.updateWaitFarePerMin(wf)
                     viewModel.updateSpeedThreshold(st)
                     viewModel.updateCurrency(currencyInput)
+                    viewModel.updateOutOfCitySurchargePercent(ooc)
                     viewModel.updateAudioEnabled(audioEnabled)
                     viewModel.updateAutoStartEnabled(autoStartEnabled)
 
@@ -465,6 +470,46 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("input_speed_threshold")
+                    )
+                }
+            }
+
+            // Out of City Surcharge Percentage Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Out of City Surcharge (%)",
+                        color = Color(0xFF1E293B),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "Percentage added to total fare when Out of City / Outstation mode is toggled on.",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    OutlinedTextField(
+                        value = outOfCitySurchargePercentInput,
+                        onValueChange = { outOfCitySurchargePercentInput = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFEA580C),
+                            unfocusedBorderColor = Color(0xFFE2E8F0),
+                            focusedTextColor = Color(0xFF0F172A),
+                            unfocusedTextColor = Color(0xFF0F172A),
+                            cursorColor = Color(0xFFEA580C)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_out_of_city_surcharge")
                     )
                 }
             }

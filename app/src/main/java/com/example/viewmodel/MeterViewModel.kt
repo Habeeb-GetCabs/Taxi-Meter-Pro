@@ -119,6 +119,13 @@ class MeterViewModel(application: Application) : AndroidViewModel(application) {
         LocationTrackingService.toggleSimulation(getApplication(), enabled)
     }
 
+    fun toggleOutOfCity(enabled: Boolean) {
+        viewModelScope.launch {
+            val surchargePct = settingsRepository.outOfCitySurchargePercent.first()
+            LocationTrackingService.toggleOutOfCity(getApplication(), enabled, surchargePct)
+        }
+    }
+
     fun deleteTrip(id: Int) {
         viewModelScope.launch {
             tripRepository.deleteTripById(id)

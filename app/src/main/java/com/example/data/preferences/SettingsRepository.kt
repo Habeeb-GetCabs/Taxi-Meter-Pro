@@ -19,6 +19,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_AUDIO_ENABLED = booleanPreferencesKey("audio_enabled")
         val KEY_AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
         val KEY_CURRENCY = stringPreferencesKey("currency")
+        val KEY_OUT_OF_CITY_SURCHARGE_PERCENT = doublePreferencesKey("out_of_city_surcharge_percent")
     }
 
     // Default configuration values
@@ -48,6 +49,10 @@ class SettingsRepository(private val context: Context) {
 
     val currency: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_CURRENCY] ?: "₹"
+    }
+
+    val outOfCitySurchargePercent: Flow<Double> = context.dataStore.data.map { preferences ->
+        preferences[KEY_OUT_OF_CITY_SURCHARGE_PERCENT] ?: 25.0
     }
 
     // Modern setter functions
@@ -90,6 +95,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateCurrency(value: String) {
         context.dataStore.edit { preferences ->
             preferences[KEY_CURRENCY] = value
+        }
+    }
+
+    suspend fun updateOutOfCitySurchargePercent(value: Double) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_OUT_OF_CITY_SURCHARGE_PERCENT] = value
         }
     }
 }

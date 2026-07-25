@@ -34,6 +34,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val currency: StateFlow<String> = settingsRepository.currency
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "₹")
 
+    val outOfCitySurchargePercent: StateFlow<Double> = settingsRepository.outOfCitySurchargePercent
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 25.0)
+
     fun updateBaseFare(value: Double) {
         viewModelScope.launch {
             settingsRepository.updateBaseFare(value)
@@ -73,6 +76,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateCurrency(value: String) {
         viewModelScope.launch {
             settingsRepository.updateCurrency(value)
+        }
+    }
+
+    fun updateOutOfCitySurchargePercent(value: Double) {
+        viewModelScope.launch {
+            settingsRepository.updateOutOfCitySurchargePercent(value)
         }
     }
 }

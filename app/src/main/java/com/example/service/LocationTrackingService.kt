@@ -137,6 +137,15 @@ class LocationTrackingService : Service() {
             }
             context.startService(intent)
         }
+
+        fun toggleOutOfCity(context: Context, enabled: Boolean, surchargePct: Double = 25.0) {
+            val intent = Intent(context, LocationTrackingService::class.java).apply {
+                action = "TOGGLE_OUT_OF_CITY"
+                putExtra("enabled", enabled)
+                putExtra("surchargePct", surchargePct)
+            }
+            context.startService(intent)
+        }
     }
 
     override fun onCreate() {
@@ -247,6 +256,20 @@ class LocationTrackingService : Service() {
                     announceVoice("GPS tracking restored.")
                 }
             }
+            "TOGGLE_OUT_OF_CITY" -> {
+                val enabled = intent.getBooleanExtra("enabled", false)
+                val surchargePct = intent.getDoubleExtra("surchargePct", 25.0)
+                _tripState.value = _tripState.value.copy(
+                    isOutOfCity = enabled,
+                    outOfCitySurchargePercent = surchargePct
+                )
+                recalculateFare()
+                if (enabled) {
+                    announceVoice("Out of city outstation tariff activated.")
+                } else {
+                    announceVoice("Standard city tariff restored.")
+                }
+            }
         }
 
         return START_STICKY
@@ -255,6 +278,30 @@ class LocationTrackingService : Service() {
     private fun announceVoice(message: String) {
         if (isTtsInitialized && _tripState.value.status != TripStatus.IDLE) {
             tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, null)
+        }
+    }
+
+    private fun resolveAddress(lat: Double, lng: Double): String {
+        if (lat == 0.0 && lng == 0.0) return "GPS Location"
+        return try {
+            val geocoder = android.location.Geocoder(this, Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(lat, lng, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val line = addr.getAddressLine(0)
+                if (!line.isNullOrBlank()) {
+                    line
+                } else {
+                    val subLoc = addr.subLocality ?: addr.locality ?: ""
+                    val city = addr.adminArea ?: ""
+                    if (subLoc.isNotEmpty()) "$subLoc, $city" else String.format(Locale.US, "Lat: %.4f, Lng: %.4f", lat, lng)
+                }
+            } else {
+                String.format(Locale.US, "Lat: %.4f, Lng: %.4f", lat, lng)
+            }
+        } catch (e: Exception) {
+            String.format(Locale.US, "Lat: %.4f, Lng: %.4f", lat, lng)
         }
     }
 
@@ -267,6 +314,10 @@ class LocationTrackingService : Service() {
             emptyList()
         }
 
+        val startLat = _tripState.value.latitude ?: 0.0
+        val startLng = _tripState.value.longitude ?: 0.0
+        val pickupAddr = resolveAddress(startLat, startLng)
+
         _tripState.value = TripState(
             status = TripStatus.RUNNING,
             startTime = System.currentTimeMillis(),
@@ -278,9 +329,13 @@ class LocationTrackingService : Service() {
             currentFare = base,
             latitude = _tripState.value.latitude,
             longitude = _tripState.value.longitude,
+            isOutOfCity = _tripState.value.isOutOfCity,
+            outOfCitySurchargePercent = _tripState.value.outOfCitySurchargePercent,
+            pickupAddress = pickupAddr,
             routePoints = initialPoints
         )
 
+        recalculateFare()
         safeStartForeground(NOTIFICATION_ID, buildNotification())
 
         lastLocation = null
@@ -358,7 +413,23 @@ class LocationTrackingService : Service() {
     private fun stopAndSaveTrip() {
         val currentState = _tripState.value
         if (currentState.status != TripStatus.IDLE) {
-            _tripState.value = currentState.copy(status = TripStatus.FINISHED)
+            val startLat = currentState.routePoints.firstOrNull()?.first ?: (currentState.latitude ?: 0.0)
+            val startLng = currentState.routePoints.firstOrNull()?.second ?: (currentState.longitude ?: 0.0)
+            val endLat = currentState.latitude ?: 0.0
+            val endLng = currentState.longitude ?: 0.0
+
+            val pAddress = if (currentState.pickupAddress.isNotBlank() && currentState.pickupAddress != "GPS Location") {
+                currentState.pickupAddress
+            } else {
+                resolveAddress(startLat, startLng)
+            }
+            val dAddress = resolveAddress(endLat, endLng)
+
+            _tripState.value = currentState.copy(
+                status = TripStatus.FINISHED,
+                pickupAddress = pAddress,
+                dropAddress = dAddress
+            )
             
             announceVoice("Ride completed. Receipts ready. Total fare ${currentState.currency}${String.format(Locale.US, "%.2f", currentState.currentFare)}")
             
@@ -377,10 +448,14 @@ class LocationTrackingService : Service() {
                         durationSeconds = currentState.durationSeconds,
                         waitingSeconds = currentState.waitingSeconds,
                         totalFare = currentState.currentFare,
-                        startLatitude = currentState.latitude ?: 0.0,
-                        startLongitude = currentState.longitude ?: 0.0,
-                        endLatitude = currentState.latitude ?: 0.0,
-                        endLongitude = currentState.longitude ?: 0.0
+                        startLatitude = startLat,
+                        startLongitude = startLng,
+                        endLatitude = endLat,
+                        endLongitude = endLng,
+                        pickupAddress = pAddress,
+                        dropAddress = dAddress,
+                        isOutOfCity = currentState.isOutOfCity,
+                        outOfCitySurcharge = currentState.outOfCitySurchargeAmount
                     )
                 )
                 repository.clearActiveTrip()
@@ -605,9 +680,19 @@ class LocationTrackingService : Service() {
         val base = state.baseFare
         val distCharge = state.distanceKm * state.farePerKm
         val waitCharge = waitMinutes * state.waitFarePerMin
-        val total = base + distCharge + waitCharge
+        val subtotal = base + distCharge + waitCharge
+        
+        val surcharge = if (state.isOutOfCity) {
+            subtotal * (state.outOfCitySurchargePercent / 100.0)
+        } else {
+            0.0
+        }
+        val total = subtotal + surcharge
 
-        _tripState.value = state.copy(currentFare = total)
+        _tripState.value = state.copy(
+            currentFare = total,
+            outOfCitySurchargeAmount = surcharge
+        )
     }
 
     private fun startTimers() {
