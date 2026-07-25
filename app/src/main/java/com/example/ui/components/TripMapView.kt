@@ -95,7 +95,6 @@ fun TripMapView(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
             .fillMaxWidth()
-            .height(250.dp)
             .border(1.dp, Color(0xFF334155), RoundedCornerShape(24.dp))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -268,7 +267,7 @@ private fun OpenStreetMapTileView(
         val tileUrl = if (useDarkStyle) {
             "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         } else {
-            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         }
         """
         <!DOCTYPE html>
@@ -280,6 +279,51 @@ private fun OpenStreetMapTileView(
             <style>
                 html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; }
                 .leaflet-control-attribution { font-size: 8px !important; opacity: 0.5; }
+                @keyframes pulse-ring {
+                    0% { transform: scale(0.8); opacity: 0.9; }
+                    50% { transform: scale(1.4); opacity: 0.25; }
+                    100% { transform: scale(0.8); opacity: 0.9; }
+                }
+                .car-pin-container {
+                    position: relative;
+                    width: 44px;
+                    height: 44px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .car-pulse {
+                    position: absolute;
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 50%;
+                    background: rgba(234, 88, 12, 0.45);
+                    animation: pulse-ring 1.8s infinite ease-in-out;
+                }
+                .car-icon-badge {
+                    position: relative;
+                    width: 32px;
+                    height: 32px;
+                    background: #facc15;
+                    border: 2.5px solid #0f172a;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                    font-size: 18px;
+                    z-index: 2;
+                }
+                .arrow-head {
+                    position: absolute;
+                    top: -6px;
+                    width: 0;
+                    height: 0;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-bottom: 9px solid #dc2626;
+                    z-index: 3;
+                }
             </style>
         </head>
         <body>
@@ -288,7 +332,7 @@ private fun OpenStreetMapTileView(
                 var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([$lat, $lon], 16);
                 L.tileLayer('$tileUrl', {
                     maxZoom: 19,
-                    attribution: 'OpenStreetMap'
+                    attribution: 'CartoDB Voyager / OpenStreetMap'
                 }).addTo(map);
 
                 var startMarker = null;
@@ -299,13 +343,13 @@ private fun OpenStreetMapTileView(
                     var latLng = [currLat, currLon];
                     
                     if (!currentMarker) {
-                        var redIcon = L.divIcon({
-                            className: 'custom-taxi-pin',
-                            html: "<div style='background-color:#ef4444;width:18px;height:18px;border-radius:50%;border:3px solid #ffffff;box-shadow:0 0 12px rgba(239,68,68,0.9);'></div>",
-                            iconSize: [18, 18],
-                            iconAnchor: [9, 9]
+                        var taxiIcon = L.divIcon({
+                            className: 'custom-taxi-car',
+                            html: "<div class='car-pin-container'><div class='car-pulse'></div><div class='car-icon-badge'><div class='arrow-head'></div>🚖</div></div>",
+                            iconSize: [44, 44],
+                            iconAnchor: [22, 22]
                         });
-                        currentMarker = L.marker(latLng, {icon: redIcon}).addTo(map);
+                        currentMarker = L.marker(latLng, {icon: taxiIcon, zIndexOffset: 1000}).addTo(map);
                     } else {
                         currentMarker.setLatLng(latLng);
                     }
@@ -315,18 +359,18 @@ private fun OpenStreetMapTileView(
                         var points = JSON.parse(routeJson);
                         if (points && points.length > 0) {
                             if (!startMarker) {
-                                var greenIcon = L.divIcon({
-                                    className: 'custom-start-pin',
-                                    html: "<div style='background-color:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid #ffffff;'></div>",
-                                    iconSize: [14, 14],
-                                    iconAnchor: [7, 7]
+                                var startIcon = L.divIcon({
+                                    className: 'custom-start-flag',
+                                    html: "<div style='background:#15803d;color:#ffffff;width:24px;height:24px;border-radius:50%;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.4);'>🏁</div>",
+                                    iconSize: [24, 24],
+                                    iconAnchor: [12, 12]
                                 });
-                                startMarker = L.marker([points[0][0], points[0][1]], {icon: greenIcon}).addTo(map);
+                                startMarker = L.marker([points[0][0], points[0][1]], {icon: startIcon}).addTo(map);
                             }
                             if (routePolyline) {
                                 routePolyline.setLatLngs(points);
                             } else {
-                                routePolyline = L.polyline(points, {color: '#ef4444', weight: 5, opacity: 0.95}).addTo(map);
+                                routePolyline = L.polyline(points, {color: '#dc2626', weight: 6, opacity: 0.9}).addTo(map);
                             }
                         }
                     } catch(e){}
@@ -344,6 +388,8 @@ private fun OpenStreetMapTileView(
                 settings.domStorageEnabled = true
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
+                settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) GetTaxiMeter/1.0"
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         val routeJson = routePoints.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }

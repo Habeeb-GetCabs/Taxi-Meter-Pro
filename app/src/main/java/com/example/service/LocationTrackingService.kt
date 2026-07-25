@@ -455,7 +455,11 @@ class LocationTrackingService : Service() {
                         pickupAddress = pAddress,
                         dropAddress = dAddress,
                         isOutOfCity = currentState.isOutOfCity,
-                        outOfCitySurcharge = currentState.outOfCitySurchargeAmount
+                        outOfCitySurcharge = currentState.outOfCitySurchargeAmount,
+                        baseFare = currentState.baseFare,
+                        farePerKm = currentState.farePerKm,
+                        waitFarePerMin = currentState.waitFarePerMin,
+                        currency = currentState.currency
                     )
                 )
                 repository.clearActiveTrip()

@@ -251,13 +251,13 @@ fun TripReceiptScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Estimated breakdown values
-                        val estBase = 80.00
-                        val estDistFare = trip.distanceKm * 28.00
-                        val estWaitFare = (trip.waitingSeconds / 60.0) * 2.00
+                        val estBase = trip.baseFare
+                        val estDistFare = trip.distanceKm * trip.farePerKm
+                        val estWaitFare = (trip.waitingSeconds / 60.0) * trip.waitFarePerMin
 
                         ReceiptLineItem(label = "Base Fare (Minimum)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estBase)}")
-                        ReceiptLineItem(label = "Distance Fare (${String.format(Locale.US, "%.1f", trip.distanceKm)} km × ${currencySymbol}28/km)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estDistFare)}")
-                        ReceiptLineItem(label = "Waiting Charge (${waitingMin}m ${waitingSec}s × ${currencySymbol}2/min)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estWaitFare)}")
+                        ReceiptLineItem(label = "Distance Fare (${String.format(Locale.US, "%.1f", trip.distanceKm)} km × $currencySymbol${String.format(Locale.US, "%.2f", trip.farePerKm)}/km)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estDistFare)}")
+                        ReceiptLineItem(label = "Waiting Charge (${waitingMin}m ${waitingSec}s × $currencySymbol${String.format(Locale.US, "%.2f", trip.waitFarePerMin)}/min)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estWaitFare)}")
 
                         if (trip.isOutOfCity) {
                             ReceiptLineItem(
@@ -583,9 +583,9 @@ WELCOME TO GET TAXI METER!
 🛣️ Total Distance: ${String.format(Locale.US, "%.2f", trip.distanceKm)} km$passenger$mapLinkText
 
 ----------------------------------
-💰 Base Fare: $currency${String.format(Locale.US, "%.2f", 80.00)}
-🛣️ Distance Charge: $currency${String.format(Locale.US, "%.2f", trip.distanceKm * 28.00)}
-⌛ Wait Charge: $currency${String.format(Locale.US, "%.2f", (trip.waitingSeconds / 60.0) * 2.00)}$outOfCityText
+💰 Base Fare: $currency${String.format(Locale.US, "%.2f", trip.baseFare)}
+🛣️ Distance Charge: $currency${String.format(Locale.US, "%.2f", trip.distanceKm * trip.farePerKm)}
+⌛ Wait Charge: $currency${String.format(Locale.US, "%.2f", (trip.waitingSeconds / 60.0) * trip.waitFarePerMin)}$outOfCityText
 ----------------------------------
 💳 *TOTAL FARE DUE: $currency${String.format(Locale.US, "%.2f", trip.totalFare)}*
 ==================================

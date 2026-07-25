@@ -194,25 +194,10 @@ fun SettingsScreen(
                                 speedThresholdInput = "5.0"
                                 currencyInput = "₹"
                             },
-                            label = { Text("🇮🇳 Standard Taxi (₹80/₹28)") },
+                            label = { Text("🚕 Standard Taxi (₹80/₹28)") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFFDCFCE7),
                                 selectedLabelColor = Color(0xFF15803D)
-                            )
-                        )
-                        FilterChip(
-                            selected = currencyInput == "$" && baseFareInput == "3.5",
-                            onClick = {
-                                baseFareInput = "3.50"
-                                farePerKmInput = "2.00"
-                                waitFarePerMinInput = "0.50"
-                                speedThresholdInput = "5.0"
-                                currencyInput = "$"
-                            },
-                            label = { Text("🚕 City Cab ($)") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFDBEAFE),
-                                selectedLabelColor = Color(0xFF1D4ED8)
                             )
                         )
                     }
@@ -239,12 +224,12 @@ fun SettingsScreen(
                             letterSpacing = 1.5.sp
                         )
                         Surface(
-                            color = Color(0xFFE53935).copy(alpha = 0.2f),
+                            color = Color(0xFF22C55E).copy(alpha = 0.2f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "Dynamic Test",
-                                color = Color(0xFFFF8A80),
+                                text = "ESTIMATOR",
+                                color = Color(0xFF86EFAC),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)

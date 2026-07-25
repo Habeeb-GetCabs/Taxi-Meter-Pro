@@ -295,14 +295,8 @@ fun HomeMeterScreen(
                 tripState = tripState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(260.dp)
                     .padding(vertical = 4.dp)
-            )
-
-            // LIVE SPEEDOMETER GAUGE
-            SpeedometerGauge(
-                currentSpeedKmH = tripState.speedKmH,
-                modifier = Modifier.padding(vertical = 6.dp)
             )
 
             // GIGANTIC FARE GAUGE DISPLAY CARD

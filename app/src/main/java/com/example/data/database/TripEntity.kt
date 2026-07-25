@@ -20,7 +20,11 @@ data class TripEntity(
     val pickupAddress: String = "",
     val dropAddress: String = "",
     val isOutOfCity: Boolean = false,
-    val outOfCitySurcharge: Double = 0.0
+    val outOfCitySurcharge: Double = 0.0,
+    val baseFare: Double = 80.0,
+    val farePerKm: Double = 28.0,
+    val waitFarePerMin: Double = 2.0,
+    val currency: String = "₹"
 )
 
 @Entity(tableName = "active_trip")
