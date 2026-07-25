@@ -23,15 +23,15 @@ class SettingsRepository(private val context: Context) {
 
     // Default configuration values
     val baseFare: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_BASE_FARE] ?: 30.00
+        preferences[KEY_BASE_FARE] ?: 80.00
     }
 
     val farePerKm: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_FARE_PER_KM] ?: 15.00
+        preferences[KEY_FARE_PER_KM] ?: 28.00
     }
 
     val waitFarePerMin: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_WAIT_FARE_PER_MIN] ?: 1.50
+        preferences[KEY_WAIT_FARE_PER_MIN] ?: 2.00
     }
 
     val speedThreshold: Flow<Double> = context.dataStore.data.map { preferences ->
@@ -43,7 +43,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val autoStartEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KEY_AUTO_START_ENABLED] ?: true
+        preferences[KEY_AUTO_START_ENABLED] ?: false
     }
 
     val currency: Flow<String> = context.dataStore.data.map { preferences ->

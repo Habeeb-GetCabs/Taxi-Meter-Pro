@@ -177,15 +177,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
-                            selected = currencyInput == "₹" && baseFareInput == "30.0",
+                            selected = currencyInput == "₹" && baseFareInput == "80.0",
                             onClick = {
-                                baseFareInput = "30.0"
-                                farePerKmInput = "15.0"
-                                waitFarePerMinInput = "1.50"
+                                baseFareInput = "80.0"
+                                farePerKmInput = "28.0"
+                                waitFarePerMinInput = "2.0"
                                 speedThresholdInput = "5.0"
                                 currencyInput = "₹"
                             },
-                            label = { Text("🇮🇳 Indian Rupee (₹)") },
+                            label = { Text("🇮🇳 Standard Taxi (₹80/₹28)") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFFDCFCE7),
                                 selectedLabelColor = Color(0xFF15803D)

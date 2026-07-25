@@ -7,10 +7,13 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,9 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.database.TripEntity
 import com.example.data.model.TripState
 import com.example.data.model.TripStatus
+import com.example.ui.components.SpeedometerGauge
 import com.example.ui.components.TripMapView
 import com.example.viewmodel.MeterViewModel
 import java.text.SimpleDateFormat
@@ -97,13 +104,14 @@ fun HomeMeterScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.LocalTaxi,
-                            contentDescription = "App Icon",
-                            tint = Color(0xFFE53935),
-                            modifier = Modifier.size(28.dp)
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo),
+                            contentDescription = "App Logo",
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "Get Taxi Meter",
                             color = Color(0xFF0F172A), // Slate-900
@@ -138,6 +146,7 @@ fun HomeMeterScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Backup Active Session Card in Soft Red
             if (hasBackup && tripState.status == TripStatus.IDLE) {
@@ -201,7 +210,7 @@ fun HomeMeterScreen(
                 }
             }
 
-            // Beautiful status & GPS diagnostics indicators (Artistic Flair Layout)
+            // Beautiful status & GPS diagnostics indicators
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -281,90 +290,20 @@ fun HomeMeterScreen(
                 }
             }
 
-            // Real-Time GPS Movement State & Auto-Start Status Banner
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = when {
-                        tripState.status == TripStatus.RUNNING && tripState.isMoving -> Color(0xFFF0FDF4) // Soft green
-                        tripState.status == TripStatus.RUNNING && !tripState.isMoving -> Color(0xFFFFFBEB) // Soft amber
-                        tripState.status == TripStatus.IDLE && tripState.autoStartEnabled -> Color(0xFFEFF6FF) // Soft blue
-                        else -> Color(0xFFF8FAFC)
-                    }
-                ),
-                shape = RoundedCornerShape(16.dp),
+            // HEADER ROUTE MAP
+            TripMapView(
+                tripState = tripState,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(180.dp)
                     .padding(vertical = 4.dp)
-                    .border(
-                        1.dp,
-                        when {
-                            tripState.status == TripStatus.RUNNING && tripState.isMoving -> Color(0xFFDCFCE7)
-                            tripState.status == TripStatus.RUNNING && !tripState.isMoving -> Color(0xFFFEF3C7)
-                            tripState.status == TripStatus.IDLE && tripState.autoStartEnabled -> Color(0xFFDBEAFE)
-                            else -> Color(0xFFE2E8F0)
-                        },
-                        RoundedCornerShape(16.dp)
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = when {
-                            tripState.status == TripStatus.RUNNING && tripState.isMoving -> Icons.Default.Speed
-                            tripState.status == TripStatus.RUNNING && !tripState.isMoving -> Icons.Default.Timer
-                            tripState.status == TripStatus.IDLE && tripState.autoStartEnabled -> Icons.Default.ElectricBolt
-                            else -> Icons.Default.Sensors
-                        },
-                        contentDescription = "Movement State",
-                        tint = when {
-                            tripState.status == TripStatus.RUNNING && tripState.isMoving -> Color(0xFF16A34A) // Green-600
-                            tripState.status == TripStatus.RUNNING && !tripState.isMoving -> Color(0xFFD97706) // Amber-600
-                            tripState.status == TripStatus.IDLE && tripState.autoStartEnabled -> Color(0xFF2563EB) // Blue-600
-                            else -> Color(0xFF64748B)
-                        },
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = when {
-                                tripState.status == TripStatus.RUNNING && tripState.isMoving ->
-                                    "Vehicle in Motion (${String.format(Locale.US, "%.1f", tripState.speedKmH)} km/h)"
-                                tripState.status == TripStatus.RUNNING && !tripState.isMoving ->
-                                    "Stationary / Idle (${String.format(Locale.US, "%.1f", tripState.speedKmH)} km/h)"
-                                tripState.status == TripStatus.IDLE && tripState.autoStartEnabled ->
-                                    "Auto-Start Ready (Speed: ${String.format(Locale.US, "%.1f", tripState.speedKmH)} km/h)"
-                                else -> "GPS Monitor Standby"
-                            },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = when {
-                                tripState.status == TripStatus.RUNNING && tripState.isMoving -> Color(0xFF15803D)
-                                tripState.status == TripStatus.RUNNING && !tripState.isMoving -> Color(0xFFB45309)
-                                tripState.status == TripStatus.IDLE && tripState.autoStartEnabled -> Color(0xFF1D4ED8)
-                                else -> Color(0xFF334155)
-                            }
-                        )
-                        Text(
-                            text = when {
-                                tripState.status == TripStatus.RUNNING && tripState.isMoving ->
-                                    "Waiting charges PAUSED during movement (>= ${tripState.speedThreshold} km/h)"
-                                tripState.status == TripStatus.RUNNING && !tripState.isMoving ->
-                                    "Accumulating waiting time (< ${tripState.speedThreshold} km/h threshold)"
-                                tripState.status == TripStatus.IDLE && tripState.autoStartEnabled ->
-                                    "Meter starts automatically when vehicle speed exceeds ${tripState.speedThreshold} km/h"
-                                else -> "Tap Start or drive above speed threshold to trigger meter"
-                            },
-                            fontSize = 10.sp,
-                            color = Color(0xFF64748B)
-                        )
-                    }
-                }
-            }
+            )
+
+            // LIVE SPEEDOMETER GAUGE
+            SpeedometerGauge(
+                currentSpeedKmH = tripState.speedKmH,
+                modifier = Modifier.padding(vertical = 6.dp)
+            )
 
             // GIGANTIC FARE GAUGE DISPLAY CARD
             Card(
@@ -375,7 +314,7 @@ fun HomeMeterScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(32.dp)) // Delicate thin border
+                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(32.dp))
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -391,7 +330,7 @@ fun HomeMeterScreen(
                         letterSpacing = 2.5.sp
                     )
                     
-                    // Artistic layout: giant fare digit alongside a superscript red symbol
+                    // Giant fare digit alongside superscript red symbol
                     Box(
                         modifier = Modifier.padding(vertical = 4.dp),
                         contentAlignment = Alignment.Center
@@ -415,7 +354,7 @@ fun HomeMeterScreen(
                         }
                     }
 
-                    // Grid of Distance, Speed, wait details with premium light slate-50 blocks
+                    // Grid of Distance & Wait time in clean light slate blocks
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -469,6 +408,129 @@ fun HomeMeterScreen(
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text("MIN", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // PRIMARY ACTION BUTTONS (START METER / PAUSE / END TRIP)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(vertical = 4.dp)
+            ) {
+                AnimatedContent(
+                    targetState = tripState.status,
+                    transitionSpec = {
+                        slideInVertically { height -> height } + fadeIn() togetherWith
+                                slideOutVertically { height -> -height } + fadeOut()
+                    },
+                    label = "MainActionControls"
+                ) { status ->
+                    when (status) {
+                        TripStatus.IDLE, TripStatus.FINISHED -> {
+                            Button(
+                                onClick = { viewModel.startTrip() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFE53935), // Accent Red
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(32.dp),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("start_trip_button")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "START METERED RIDE", 
+                                        fontSize = 16.sp, 
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.5.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        TripStatus.RUNNING -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.pauseTrip() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(32.dp),
+                                    border = BorderStroke(2.dp, Color(0xFFE53935)),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Pause, contentDescription = null, tint = Color(0xFFE53935))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("PAUSE", fontWeight = FontWeight.Bold, color = Color(0xFFE53935), letterSpacing = 1.sp)
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { viewModel.stopTrip() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                    shape = RoundedCornerShape(32.dp),
+                                    modifier = Modifier
+                                        .weight(1.3f)
+                                        .fillMaxHeight()
+                                        .testTag("stop_trip_button")
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Stop, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("END TRIP", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        TripStatus.PAUSED -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.resumeTrip() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    shape = RoundedCornerShape(32.dp),
+                                    modifier = Modifier
+                                        .weight(1.1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("RESUME", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { viewModel.stopTrip() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                    shape = RoundedCornerShape(32.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Stop, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("END TRIP", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                                    }
                                 }
                             }
                         }
@@ -530,137 +592,7 @@ fun HomeMeterScreen(
                 }
             }
 
-            // Real-Time Google Maps Route Component
-            TripMapView(
-                tripState = tripState,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ACTION TRANSITION PILL CONTROLS (Rounded 3xl layout)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-            ) {
-                AnimatedContent(
-                    targetState = tripState.status,
-                    transitionSpec = {
-                        slideInVertically { height -> height } + fadeIn() togetherWith
-                                slideOutVertically { height -> -height } + fadeOut()
-                    },
-                    label = "ArtisticControls"
-                ) { status ->
-                    when (status) {
-                        TripStatus.IDLE, TripStatus.FINISHED -> {
-                            Button(
-                                onClick = { viewModel.startTrip() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFE53935), // Artistic Accent Red
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(32.dp),
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .testTag("start_trip_button")
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "START METERED RIDE", 
-                                        fontSize = 14.sp, 
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 1.5.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        TripStatus.RUNNING -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Button(
-                                    onClick = { viewModel.pauseTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                    shape = RoundedCornerShape(32.dp),
-                                    border = BorderStroke(2.dp, Color(0xFFE53935)), // Outlined style
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Pause, contentDescription = null, tint = Color(0xFFE53935))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("PAUSE", fontWeight = FontWeight.Bold, color = Color(0xFFE53935), letterSpacing = 1.sp)
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { viewModel.stopTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .fillMaxHeight()
-                                        .testTag("stop_trip_button")
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Stop, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("END TRIP", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        TripStatus.PAUSED -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Button(
-                                    onClick = { viewModel.resumeTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)), // emerald-500
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1.1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("RESUME", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { viewModel.stopTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Stop, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("END TRIP", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // TRIP HISTORIES HEADER
             Text(
@@ -677,7 +609,7 @@ fun HomeMeterScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -697,15 +629,14 @@ fun HomeMeterScreen(
                     }
                 }
             } else {
-                LazyColumn(
+                Column(
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
-                        .testTag("trips_history_list"),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                        .testTag("trips_history_list")
+                        .padding(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(allTrips, key = { it.id }) { trip ->
+                    allTrips.forEach { trip ->
                         HistoryTripRow(
                             trip = trip,
                             currency = tripState.currency,

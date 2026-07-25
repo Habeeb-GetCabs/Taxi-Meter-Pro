@@ -129,6 +129,14 @@ class LocationTrackingService : Service() {
                 context.startService(intent)
             }
         }
+
+        fun toggleSimulation(context: Context, enabled: Boolean) {
+            val intent = Intent(context, LocationTrackingService::class.java).apply {
+                action = "TOGGLE_SIMULATION"
+                putExtra("enabled", enabled)
+            }
+            context.startService(intent)
+        }
     }
 
     override fun onCreate() {
@@ -170,7 +178,7 @@ class LocationTrackingService : Service() {
                     this, android.Manifest.permission.ACCESS_COARSE_LOCATION
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-                if (hasLocationPerm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                if (hasLocationPerm) {
                     startForeground(id, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
                 } else {
                     startForeground(id, notification)
@@ -189,18 +197,18 @@ class LocationTrackingService : Service() {
 
         when (action) {
             "START" -> {
-                val base = intent.getDoubleExtra("baseFare", 30.0)
-                val rate = intent.getDoubleExtra("farePerKm", 15.0)
-                val wait = intent.getDoubleExtra("waitFarePerMin", 1.50)
+                val base = intent.getDoubleExtra("baseFare", 80.0)
+                val rate = intent.getDoubleExtra("farePerKm", 28.0)
+                val wait = intent.getDoubleExtra("waitFarePerMin", 2.0)
                 val curr = intent.getStringExtra("currency") ?: "₹"
                 val speedLim = intent.getDoubleExtra("speedThreshold", 5.0)
 
                 initiateNewTrip(base, rate, wait, curr, speedLim)
             }
             "MONITOR" -> {
-                val base = intent.getDoubleExtra("baseFare", 30.0)
-                val rate = intent.getDoubleExtra("farePerKm", 15.0)
-                val wait = intent.getDoubleExtra("waitFarePerMin", 1.50)
+                val base = intent.getDoubleExtra("baseFare", 80.0)
+                val rate = intent.getDoubleExtra("farePerKm", 28.0)
+                val wait = intent.getDoubleExtra("waitFarePerMin", 2.0)
                 val curr = intent.getStringExtra("currency") ?: "₹"
                 val speedLim = intent.getDoubleExtra("speedThreshold", 5.0)
                 val autoStart = intent.getBooleanExtra("autoStartEnabled", true)
@@ -215,6 +223,7 @@ class LocationTrackingService : Service() {
                 )
 
                 recalculateFare()
+                safeStartForeground(NOTIFICATION_ID, buildNotification())
                 startTrackingLocation()
             }
             "PAUSE" -> {
@@ -228,6 +237,15 @@ class LocationTrackingService : Service() {
             }
             "RECOVER" -> {
                 recoverSavedTrip()
+            }
+            "TOGGLE_SIMULATION" -> {
+                val enabled = intent.getBooleanExtra("enabled", false)
+                _tripState.value = _tripState.value.copy(isSimulationEnabled = enabled)
+                if (enabled) {
+                    announceVoice("Simulation demo mode enabled.")
+                } else {
+                    announceVoice("GPS tracking restored.")
+                }
             }
         }
 
@@ -263,11 +281,12 @@ class LocationTrackingService : Service() {
             routePoints = initialPoints
         )
 
+        safeStartForeground(NOTIFICATION_ID, buildNotification())
+
         lastLocation = null
         startTrackingLocation()
         startTimers()
 
-        safeStartForeground(NOTIFICATION_ID, buildNotification())
         announceVoice("Ride started. Base fare of $curr$base applied.")
         
         saveSnapshotToDatabase()
@@ -291,6 +310,7 @@ class LocationTrackingService : Service() {
             _tripState.value = _tripState.value.copy(
                 status = TripStatus.RUNNING
             )
+            safeStartForeground(NOTIFICATION_ID, buildNotification())
             lastLocation = null
             startTrackingLocation()
             announceVoice("Ride resumed.")
@@ -389,6 +409,9 @@ class LocationTrackingService : Service() {
             return
         }
 
+        // Clean up previous callbacks before creating a new one
+        stopTrackingLocation()
+
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L).apply {
             setMinUpdateIntervalMillis(1000L)
             setWaitForAccurateLocation(false)
@@ -402,6 +425,7 @@ class LocationTrackingService : Service() {
             }
         }
 
+        var requestedSuccessfully = false
         if (fusedLocationClient != null) {
             try {
                 fusedLocationClient?.requestLocationUpdates(
@@ -409,11 +433,14 @@ class LocationTrackingService : Service() {
                     locationCallback!!,
                     Looper.getMainLooper()
                 )
+                requestedSuccessfully = true
                 Log.d(TAG, "Fused location updates requested successfully")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "Failed requesting Fused GPS updates", e)
             }
-        } else {
+        }
+
+        if (!requestedSuccessfully && locationManager != null) {
             // Direct android.location.LocationManager Registration for fallback
             try {
                 locationListener = object : android.location.LocationListener {
@@ -426,17 +453,25 @@ class LocationTrackingService : Service() {
                     override fun onProviderDisabled(provider: String) {}
                 }
 
-                if (locationManager?.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) == true) {
+                val provider = when {
+                    locationManager?.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) == true ->
+                        android.location.LocationManager.GPS_PROVIDER
+                    locationManager?.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER) == true ->
+                        android.location.LocationManager.NETWORK_PROVIDER
+                    else -> null
+                }
+
+                if (provider != null) {
                     locationManager?.requestLocationUpdates(
-                        android.location.LocationManager.GPS_PROVIDER,
+                        provider,
                         1000L,
                         1.0f,
                         locationListener!!,
                         Looper.getMainLooper()
                     )
-                    Log.d(TAG, "LocationManager GPS_PROVIDER registered")
+                    Log.d(TAG, "LocationManager $provider registered")
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "Failed requesting LocationManager updates", e)
             }
         }
@@ -459,13 +494,17 @@ class LocationTrackingService : Service() {
     }
 
     private fun processIncomingLocation(location: Location) {
+        if (_tripState.value.isSimulationEnabled) {
+            return // Skip hardware GPS when demo simulation mode is running
+        }
+
         // Discard duplicate or backwards-in-time updates from dual providers
         if (lastLocation != null && location.time <= lastLocation!!.time) {
             return
         }
 
-        // Discard bad quality coordinates (accuracy over 25 meters is unreliable for taximeter)
-        if (location.accuracy > 25.0f) {
+        // Allow up to 150.0m accuracy tolerance for real mobile reception
+        if (location.hasAccuracy() && location.accuracy > 150.0f) {
             Log.d(TAG, "Discarded inaccurate coordinate: ${location.accuracy}m")
             return
         }
@@ -474,15 +513,22 @@ class LocationTrackingService : Service() {
         val speedMps = if (location.hasSpeed()) location.speed else 0.0f
         var speedKmh = speedMps * 3.6 // m/s to km/h
 
-        if (speedKmh <= 0.0 && lastLocation != null) {
-            val deltaDistanceM = lastLocation!!.distanceTo(location)
+        var deltaDistanceM = 0.0
+        if (lastLocation != null) {
+            deltaDistanceM = lastLocation!!.distanceTo(location).toDouble()
             val timeDeltaS = (location.time - lastLocation!!.time) / 1000.0
-            if (timeDeltaS > 0.1) {
+            if (speedKmh <= 0.0 && timeDeltaS > 0.1) {
                 speedKmh = (deltaDistanceM / timeDeltaS) * 3.6
+            }
+            if (timeDeltaS > 0.1 && (deltaDistanceM / timeDeltaS) * 3.6 > 250.0) {
+                Log.d(TAG, "Discarded GPS jump anomaly")
+                lastLocation = location
+                return
             }
         }
 
-        val isMoving = speedKmh >= currentState.speedThreshold
+        // Determine if vehicle is moving based on speed or location displacement
+        val isMoving = speedKmh >= currentState.speedThreshold || deltaDistanceM >= 2.0
 
         // AUTO-START ON SPEED THRESHOLD
         if (currentState.autoStartEnabled) {
@@ -495,7 +541,7 @@ class LocationTrackingService : Service() {
                     curr = currentState.currency,
                     speedLim = currentState.speedThreshold
                 )
-                announceVoice("Vehicle speed exceeded ${String.format(Locale.US, "%.1f", currentState.speedThreshold)} km per hour. Taxi meter auto-started.")
+                announceVoice("Vehicle speed detected. Taxi meter auto-started.")
                 return
             } else if (currentState.status == TripStatus.PAUSED && isMoving) {
                 Log.d(TAG, "Vehicle movement detected ($speedKmh km/h). Auto-resuming trip!")
@@ -517,45 +563,26 @@ class LocationTrackingService : Service() {
             return
         }
 
+        // ALWAYS ACCUMULATE DISTANCE WHEN PHYSICAL POSITION CHANGES (>= 0.5 meters)
         var newDistance = currentState.distanceKm
-
-        if (lastLocation != null) {
-            val deltaDistanceM = lastLocation!!.distanceTo(location)
-            
-            // Check for extreme anomalies (vehicle moving faster than 250km/h is likely GPS jump)
-            val timeDeltaS = (location.time - lastLocation!!.time) / 1000.0
-            if (timeDeltaS > 0.1) {
-                val calcSpeedKmh = (deltaDistanceM / timeDeltaS) * 3.6
-                if (calcSpeedKmh > 250.0) {
-                    Log.d(TAG, "Discarded GPS jump anomaly: $calcSpeedKmh km/h")
-                    lastLocation = location
-                    return
-                }
-            }
-
-            if (isMoving) {
-                newDistance += deltaDistanceM / 1000.0 // Convert to KM
-            }
+        if (lastLocation != null && deltaDistanceM >= 0.5) {
+            newDistance += deltaDistanceM / 1000.0 // Convert meters to KM
         }
 
         lastLocation = location
 
         val currentPoint = Pair(location.latitude, location.longitude)
-        val updatedRoutePoints = if (currentState.status == TripStatus.RUNNING) {
-            if (currentState.routePoints.isEmpty()) {
-                listOf(currentPoint)
-            } else {
-                val lastPt = currentState.routePoints.last()
-                val results = FloatArray(1)
-                Location.distanceBetween(lastPt.first, lastPt.second, location.latitude, location.longitude, results)
-                if (results[0] >= 3.0) { // filter out jitter under 3 meters
-                    currentState.routePoints + currentPoint
-                } else {
-                    currentState.routePoints
-                }
-            }
+        val updatedRoutePoints = if (currentState.routePoints.isEmpty()) {
+            listOf(currentPoint)
         } else {
-            currentState.routePoints
+            val lastPt = currentState.routePoints.last()
+            val results = FloatArray(1)
+            Location.distanceBetween(lastPt.first, lastPt.second, location.latitude, location.longitude, results)
+            if (results[0] >= 2.5) { // filter out jitter under 2.5 meters
+                currentState.routePoints + currentPoint
+            } else {
+                currentState.routePoints
+            }
         }
 
         _tripState.value = currentState.copy(
@@ -591,22 +618,31 @@ class LocationTrackingService : Service() {
                 val state = _tripState.value
                 if (state.status == TripStatus.RUNNING) {
                     val nextElapsed = state.durationSeconds + 1
-                    var nextWait = state.waitingSeconds
-                    
-                    // Core Taxi billing rule & GPS movement state:
-                    // Speed at or above threshold -> Vehicle is MOVING -> Waiting charges ARE PAUSED!
-                    // Speed below threshold -> Vehicle is STATIONARY / IDLE -> Waiting charges ACCUMULATE!
-                    val isMoving = state.speedKmH >= state.speedThreshold
-                    if (!isMoving) {
-                        nextWait += 1
-                    }
 
-                    _tripState.value = state.copy(
-                        durationSeconds = nextElapsed,
-                        waitingSeconds = nextWait,
-                        isMoving = isMoving,
-                        isWaitingPaused = isMoving
-                    )
+                    if (state.isSimulationEnabled) {
+                        // SIMULATION MODE: Simulate ~36 km/h drive (+0.01 km = 10 meters per second)
+                        val nextDist = state.distanceKm + 0.010
+                        _tripState.value = state.copy(
+                            durationSeconds = nextElapsed,
+                            distanceKm = nextDist,
+                            speedKmH = 36.0,
+                            isMoving = true,
+                            isWaitingPaused = true
+                        )
+                    } else {
+                        // NORMAL GPS MODE
+                        var nextWait = state.waitingSeconds
+                        val isMoving = state.isMoving || state.speedKmH >= state.speedThreshold
+                        if (!isMoving) {
+                            nextWait += 1
+                        }
+
+                        _tripState.value = state.copy(
+                            durationSeconds = nextElapsed,
+                            waitingSeconds = nextWait,
+                            isWaitingPaused = isMoving
+                        )
+                    }
 
                     recalculateFare()
                     updateNotification()

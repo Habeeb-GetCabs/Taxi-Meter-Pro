@@ -115,6 +115,10 @@ class MeterViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleSimulation(enabled: Boolean) {
+        LocationTrackingService.toggleSimulation(getApplication(), enabled)
+    }
+
     fun deleteTrip(id: Int) {
         viewModelScope.launch {
             tripRepository.deleteTripById(id)

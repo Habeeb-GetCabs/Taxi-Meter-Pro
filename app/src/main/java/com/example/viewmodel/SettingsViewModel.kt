@@ -14,13 +14,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val settingsRepository = SettingsRepository(application)
 
     val baseFare: StateFlow<Double> = settingsRepository.baseFare
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30.00)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80.00)
 
     val farePerKm: StateFlow<Double> = settingsRepository.farePerKm
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15.00)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 28.00)
 
     val waitFarePerMin: StateFlow<Double> = settingsRepository.waitFarePerMin
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.50)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2.00)
 
     val speedThreshold: StateFlow<Double> = settingsRepository.speedThreshold
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5.0)
